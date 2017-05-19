@@ -1,0 +1,24 @@
+{
+  "name": "watchmen-plugin-graphite",
+  "version": "0.1.0",
+  "description": "Graphite source plugin for Watchmen",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Alex-Sh/watchmen-plugin-graphite.git"
+  },
+  "keywords": [
+    "watchmen",
+    "graphite"
+  ],
+  "author": "Alex-Sh",
+  "license": "MIT",
+  "homepage": "https://github.com/Alex-Sh/watchmen-plugin-graphite#readme",
+  "dependencies": {
+    "dotenv": "^1.2.0",
+    "reliable-graphite": "^1.0.4"
+  }
+}
