@@ -19,6 +19,7 @@
   "homepage": "https://github.com/Alex-Sh/watchmen-plugin-graphite#readme",
   "dependencies": {
     "dotenv": "^1.2.0",
-    "reliable-graphite": "^1.0.4"
+    "reliable-graphite": "^1.0.4",
+    "request": "^2.55.0"
   }
 }

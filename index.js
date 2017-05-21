@@ -1,37 +1,98 @@
 var Graphite = require('reliable-graphite');
+var request = require('request');
 require('dotenv').load({silent: true});
 
-console.log(process.env.WATCHMEN_GRAPHITE_HOST);
-console.log(process.env.WATCHMEN_GRAPHITE_PORT);
+// Use all variables from .env or pass config file path to WATCHMEN_GRAPHITE_CONFIG
+var config = (function () {
+  if (process.env.WATCHMEN_GRAPHITE_CONFIG) {
+    return require(process.env.WATCHMEN_GRAPHITE_CONFIG);
+  }
+  return {
+    graphite_host: process.env.WATCHMEN_GRAPHITE_HOST,
+    graphite_port: process.env.WATCHMEN_GRAPHITE_PORT,
+    graphite_api: {
+      url: process.env.WATCHMEN_GRAPHITE_API,
+      user: process.env.WATCHMEN_GRAPHITE_API_USER,
+      pass: process.env.WATCHMEN_GRAPHITE_API_PASS,
+    }
+  };
+})();
+console.log(config);
 
-const graphite = new Graphite(process.env.WATCHMEN_GRAPHITE_HOST, process.env.WATCHMEN_GRAPHITE_PORT, {
-    socket_timeout: 300000,
-    socket_reconnect_delay: 1000,
-    queue_size_limit: 10000000,
-    chunk_size: 200,
-    logger: (severity, message) => console[severity](message)
-})
-;
+var graphite = new Graphite(config.graphite_host, config.graphite_port);
 
+/**
+ * Filter service name before sending
+ * @param name
+ */
 function filterName (name) {
   return name.replace(/http(s)?|:|\/\//g, '').replace(/\/|\./g, '_');
 }
 
+/**
+ * Send Graphite event
+ * @param body
+ */
+function sendEvent (body) {
+  return request(
+    {
+      method: 'POST',
+      uri: config.graphite_api.url + '/events/',
+      body: body,
+      auth: {
+        user: config.graphite_api.user,
+        pass: config.graphite_api.pass
+      },
+      json: true
+    }
+  );
+}
+
+/**
+ * Watchmen event handlers
+ */
 var eventHandlers = {
   onFailedCheck: function (service, data) {
-    graphite.push('monitor.uptime.' + filterName(service.name) + '.time', null);
-    graphite.push('monitor.uptime.' + filterName(service.name) + '.status', 0);
+    graphite.push('watchmen.' + filterName(service.name) + '.failedCheck', 1);
   },
 
   onServiceOk: function (service, data) {
-    graphite.push('monitor.uptime.' + filterName(service.name) + '.time', data.elapsedTime);
-    graphite.push('monitor.uptime.' + filterName(service.name) + '.status', 1);
-  }
+    graphite.push('watchmen.' + filterName(service.name) + '.serviceOk', data.elapsedTime);
+  },
+
+  onNewOutage: function (service, outage) {
+    graphite.push('watchmen.' + filterName(service.name) + '.newOutage', 1);
+    sendEvent({
+      what: 'OUTAGE',
+      tags: 'watchmen ' + service.name + ' outage',
+      when: Math.round(outage.timestamp / 1000),
+      data: 'Service: ' + service.name + ' (' + service.url + '). ' +
+      'Type: ' + service.pingServiceName + '. ' +
+      'Error: ' + JSON.stringify(outage.error)
+    });
+  },
+
+  onServiceBack: function (service, lastOutage) {
+    var duration = Math.round((new Date().getTime() - lastOutage.timestamp) / 1000);
+    graphite.push('watchmen.' + filterName(service.name) + '.serviceBack', duration);
+
+    sendEvent({
+      what: 'RECOVERY',
+      tags: 'watchmen ' + service.name + ' recovery',
+      when: Math.round(new Date().getTime() / 1000),
+      data: 'Service: ' + service.name + ' (' + service.url + '). ' +
+      'Type: ' + service.pingServiceName + '. ' +
+      'Error: ' + JSON.stringify(lastOutage.error) + '. ' +
+      'Duration: ' + (duration / 60).toFixed(2) + ' min.'
+    });
+  },
 };
 
 function GraphitePlugin (watchmen) {
   watchmen.on('service-error', eventHandlers.onFailedCheck);
   watchmen.on('service-ok', eventHandlers.onServiceOk);
+  watchmen.on('service-back', eventHandlers.onServiceBack);
+  watchmen.on('new-outage', eventHandlers.onNewOutage);
 }
 
 exports = module.exports = GraphitePlugin;
