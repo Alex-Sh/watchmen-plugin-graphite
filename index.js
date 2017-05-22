@@ -53,7 +53,8 @@ function sendEvent (body) {
  */
 var eventHandlers = {
   onFailedCheck: function (service, data) {
-    graphite.push('watchmen.' + filterName(service.name) + '.failedCheck', 1);
+    // Write failureInterval in ms. to calculate clear failure time
+    graphite.push('watchmen.' + filterName(service.name) + '.failedCheck', service.failureInterval);
   },
 
   onServiceOk: function (service, data) {
@@ -61,6 +62,7 @@ var eventHandlers = {
   },
 
   onNewOutage: function (service, outage) {
+    // Send just an event indicator, 1
     graphite.push('watchmen.' + filterName(service.name) + '.newOutage', 1);
     sendEvent({
       what: 'OUTAGE',
@@ -73,10 +75,11 @@ var eventHandlers = {
   },
 
   onServiceBack: function (service, lastOutage) {
-    var duration = Math.round((new Date().getTime() - lastOutage.timestamp) / 1000);
-    graphite.push('watchmen.' + filterName(service.name) + '.serviceBack', duration);
+    // Send downtime duration in ms.
+    graphite.push('watchmen.' + filterName(service.name) + '.serviceBack', new Date().getTime() - lastOutage.timestamp);
 
-    var minutes = Math.floor(duration / 60) + ":" + (duration % 60 ? duration % 60 : '00');
+    var duration = Math.round((new Date().getTime() - lastOutage.timestamp) / 1000);
+    var minutes = Math.floor(duration / 60) + ':' + (duration % 60 ? duration % 60 : '00');
     sendEvent({
       what: 'RECOVERY',
       tags: 'watchmen ' + service.name + ' recovery',
