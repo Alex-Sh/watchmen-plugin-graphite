@@ -76,6 +76,7 @@ var eventHandlers = {
     var duration = Math.round((new Date().getTime() - lastOutage.timestamp) / 1000);
     graphite.push('watchmen.' + filterName(service.name) + '.serviceBack', duration);
 
+    var minutes = Math.floor(duration / 60) + ":" + (duration % 60 ? duration % 60 : '00');
     sendEvent({
       what: 'RECOVERY',
       tags: 'watchmen ' + service.name + ' recovery',
@@ -83,7 +84,7 @@ var eventHandlers = {
       data: 'Service: ' + service.name + ' (' + service.url + '). ' +
       'Type: ' + service.pingServiceName + '. ' +
       'Error: ' + JSON.stringify(lastOutage.error) + '. ' +
-      'Duration: ' + (duration / 60).toFixed(2) + ' min.'
+      'Duration: ' + minutes + ' min.'
     });
   },
 };
