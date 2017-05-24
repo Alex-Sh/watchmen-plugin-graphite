@@ -36,6 +36,20 @@ function filterName (name) {
 }
 
 /**
+ * Send data to Graphite
+ * @param {Object} service
+ * @param {String} metric
+ * @param value
+ */
+function sendData (service, metric, value) {
+  try {
+    graphite.push('watchmen.' + filterName(service.name) + '.' + metric, value);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+/**
  * Send Graphite event
  * @param {Object} service
  * @param {Object} body
@@ -59,6 +73,11 @@ function sendEvent (service, body) {
         pass: config.graphite_api.pass
       },
       json: true
+    },
+    function (error) {
+      if (error) {
+        console.error('Request error:', error);
+      }
     }
   );
 }
@@ -69,8 +88,8 @@ function sendEvent (service, body) {
 var eventHandlers = {
 
   onFailedCheck: function (service, data) {
-    // Send new outage indication with failureInterval in ms. for full downtime calculations
-    graphite.push('watchmen.' + filterName(service.name) + '.failedCheck', service.failureInterval);
+    // Send failed check indication
+    sendData(service, 'failedCheck', 1);
 
     if (config.graphite_event.failedCheck) {
       sendEvent(service, {
@@ -86,7 +105,7 @@ var eventHandlers = {
 
   onLatencyWarning: function (service, data) {
     // Send latency warning indication with elapsed time
-    graphite.push('watchmen.' + filterName(service.name) + '.latencyWarning', data.elapsedTime);
+    sendData(service, 'latencyWarning', data.elapsedTime);
 
     if (config.graphite_event.latencyWarning) {
       sendEvent(service, {
@@ -103,14 +122,12 @@ var eventHandlers = {
 
   onServiceOk: function (service, data) {
     // Send success check load time
-    graphite.push('watchmen.' + filterName(service.name) + '.serviceOk', data.elapsedTime);
+    sendData(service, 'serviceOk', data.elapsedTime);
   },
 
   onNewOutage: function (service, outage) {
-    // Send new outage indication with real start date calculated from failureInterval and failuresToBeOutage
-    var failuresToBeOutage = isNaN(service.failuresToBeOutage) ? 1 : service.failuresToBeOutage;
-    if (failuresToBeOutage > 1) failuresToBeOutage -= 1;
-    graphite.push('watchmen.' + filterName(service.name) + '.newOutage', service.failureInterval * failuresToBeOutage);
+    // Send new outage indication
+    sendData(service, 'newOutage', 1);
 
     if (config.graphite_event.newOutage) {
       sendEvent(service, {
@@ -126,7 +143,7 @@ var eventHandlers = {
 
   onServiceBack: function (service, lastOutage) {
     // Send downtime duration in ms. (from latest outage)
-    graphite.push('watchmen.' + filterName(service.name) + '.serviceBack', new Date().getTime() - lastOutage.timestamp);
+    sendData(service, 'serviceBack', new Date().getTime() - lastOutage.timestamp);
 
     if (config.graphite_event.serviceBack) {
       var duration = Math.round((new Date().getTime() - lastOutage.timestamp) / 1000);
